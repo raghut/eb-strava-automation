@@ -32,7 +32,6 @@
   <div id="log-container"></div>
 
   <script>
-    // Add logging functionality
     function log(message, type = 'info') {
       console.log(message);
       const logContainer = document.getElementById('log-container');
@@ -50,7 +49,7 @@
       const webhookURL = "https://script.google.com/macros/s/AKfycbyTtl2WLe37XxgWXqtStvZS_DAMmdMqg5mVjYbRMNcJiCH2fmM4guXJYOm3Zh1LZ66bgQ/exec";
 
       log(`URL parameters: ${window.location.search}`);
-      
+
       if (!code) {
         const errorMsg = "Missing 'code' parameter.";
         log(errorMsg, 'error');
@@ -59,50 +58,49 @@
       }
 
       log(`Authorization code received: ${code.substring(0, 5)}...`);
-      
+
       try {
         log('Exchanging authorization code for token...');
         const tokenResponse = await fetch("https://www.strava.com/oauth/token", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({
-            client_id: "YOUR_CLIENT_ID",
-            client_secret: "YOUR_CLIENT_SECRET",
+            client_id: "156624",
+            client_secret: "9610dae4888471fe258ce589a7b2edc14c826251",
             code: code,
             grant_type: "authorization_code"
           })
         });
 
         log(`Token response status: ${tokenResponse.status}`);
-        
+
         if (!tokenResponse.ok) {
           throw new Error(`Token exchange failed with status ${tokenResponse.status}`);
         }
 
         const data = await tokenResponse.json();
         log('Token response received', 'success');
-        log(`Access token received: ${data.access_token ? (data.access_token.substring(0, 5) + '...') : 'undefined'}`);
-        log(`Refresh token received: ${data.refresh_token ? (data.refresh_token.substring(0, 5) + '...') : 'undefined'}`);
-        log(`Token expires at: ${data.expires_at ? new Date(data.expires_at * 1000).toLocaleString() : 'undefined'}`);
-        
-        log('Sending token to webhook...');
-        const webhookResponse = await fetch(webhookURL, {
-          method: "POST",
-          body: JSON.stringify(data),
-          headers: { "Content-Type": "application/json" }
-        });
+        log(`Access token: ${data.access_token ? data.access_token.substring(0, 5) + "..." : 'N/A'}`);
+        log(`Refresh token: ${data.refresh_token ? data.refresh_token.substring(0, 5) + "..." : 'N/A'}`);
 
-        log(`Webhook response status: ${webhookResponse.status}`);
-        
-        if (!webhookResponse.ok) {
-          throw new Error(`Webhook request failed with status ${webhookResponse.status}`);
-        }
+        log('Submitting token to webhook using HTML form (CORS-safe)...');
 
-        const webhookData = await webhookResponse.text();
-        log(`Webhook response: ${webhookData}`, 'success');
-        
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = webhookURL;
+
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "payload";
+        input.value = JSON.stringify(data);
+
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+
         document.getElementById("status").textContent = "✅ Token saved! You can close this tab.";
-        log('Authorization process completed successfully', 'success');
+        log('Authorization process completed and submitted successfully', 'success');
+
       } catch (err) {
         const errorMsg = "❌ Error saving token.";
         log(`Error: ${err.message}`, 'error');
@@ -111,7 +109,6 @@
       }
     }
 
-    // Initialize the page
     log('Page loaded, starting authorization process');
     exchangeAndSaveToken();
   </script>
