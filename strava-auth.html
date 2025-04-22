@@ -2,23 +2,66 @@
 <html>
 <head>
   <title>Strava Token Auto-Saver</title>
+  <style>
+    #log-container {
+      margin-top: 20px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      background-color: #f5f5f5;
+    }
+    .log-entry {
+      margin: 5px 0;
+    }
+    .log-error {
+      color: red;
+    }
+    .log-info {
+      color: blue;
+    }
+    .log-success {
+      color: green;
+    }
+  </style>
 </head>
 <body>
   <h2>Authorizing with Strava...</h2>
   <p id="status">Please wait...</p>
+  <div id="log-container"></div>
 
   <script>
+    // Add logging functionality
+    function log(message, type = 'info') {
+      console.log(message);
+      const logContainer = document.getElementById('log-container');
+      const logEntry = document.createElement('div');
+      logEntry.className = `log-entry log-${type}`;
+      logEntry.textContent = `[${new Date().toISOString()}] ${message}`;
+      logContainer.appendChild(logEntry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
     async function exchangeAndSaveToken() {
+      log('Starting authorization process');
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
       const webhookURL = "https://script.google.com/macros/s/AKfycbyTtl2WLe37XxgWXqtStvZS_DAMmdMqg5mVjYbRMNcJiCH2fmM4guXJYOm3Zh1LZ66bgQ/exec";
 
+      log(`URL parameters: ${window.location.search}`);
+      
       if (!code) {
-        document.getElementById("status").textContent = "Missing 'code' parameter.";
+        const errorMsg = "Missing 'code' parameter.";
+        log(errorMsg, 'error');
+        document.getElementById("status").textContent = errorMsg;
         return;
       }
 
+      log(`Authorization code received: ${code.substring(0, 5)}...`);
+      
       try {
+        log('Exchanging authorization code for token...');
         const tokenResponse = await fetch("https://www.strava.com/oauth/token", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -30,22 +73,46 @@
           })
         });
 
-        const data = await tokenResponse.json();
-        console.info("tokenResponse", data);
+        log(`Token response status: ${tokenResponse.status}`);
+        
+        if (!tokenResponse.ok) {
+          throw new Error(`Token exchange failed with status ${tokenResponse.status}`);
+        }
 
-        await fetch(webhookURL, {
+        const data = await tokenResponse.json();
+        log('Token response received', 'success');
+        log(`Access token received: ${data.access_token ? (data.access_token.substring(0, 5) + '...') : 'undefined'}`);
+        log(`Refresh token received: ${data.refresh_token ? (data.refresh_token.substring(0, 5) + '...') : 'undefined'}`);
+        log(`Token expires at: ${data.expires_at ? new Date(data.expires_at * 1000).toLocaleString() : 'undefined'}`);
+        
+        log('Sending token to webhook...');
+        const webhookResponse = await fetch(webhookURL, {
           method: "POST",
           body: JSON.stringify(data),
           headers: { "Content-Type": "application/json" }
         });
 
+        log(`Webhook response status: ${webhookResponse.status}`);
+        
+        if (!webhookResponse.ok) {
+          throw new Error(`Webhook request failed with status ${webhookResponse.status}`);
+        }
+
+        const webhookData = await webhookResponse.text();
+        log(`Webhook response: ${webhookData}`, 'success');
+        
         document.getElementById("status").textContent = "✅ Token saved! You can close this tab.";
+        log('Authorization process completed successfully', 'success');
       } catch (err) {
-        document.getElementById("status").textContent = "❌ Error saving token.";
+        const errorMsg = "❌ Error saving token.";
+        log(`Error: ${err.message}`, 'error');
+        document.getElementById("status").textContent = errorMsg;
         console.error(err);
       }
     }
 
+    // Initialize the page
+    log('Page loaded, starting authorization process');
     exchangeAndSaveToken();
   </script>
 </body>
